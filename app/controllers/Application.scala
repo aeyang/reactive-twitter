@@ -2,7 +2,6 @@ package controllers
 
 import play.api._
 import play.api.mvc._
-
 import play.api.libs.oauth.{ConsumerKey, RequestToken, OAuthCalculator}
 import play.api.Play.current
 import scala.concurrent.Future
@@ -10,6 +9,8 @@ import play.api.libs.concurrent.Execution.Implicits._
 import play.api.libs.ws._
 import play.api.libs.iteratee._
 import play.api.Logger
+import play.api.libs.json._
+import play.extras.iteratees._
 
 class Application extends Controller {
 
@@ -38,13 +39,30 @@ class Application extends Controller {
     the thread. Only when new data arrives will the iteratee make use of the thread again.
     This is in contrast to how java.io.OutputStream works for example.
     */
-    val loggingIteratee = Iteratee.foreach[Array[Byte]] { array =>
-      Logger.info(array.map(_.toChar).mkString)
-    }
+    //val loggingIteratee = Iteratee.foreach[Array[Byte]] { array =>
+    //  Logger.info(array.map(_.toChar).mkString)
+    //}
 
     // credentials is a function call
     credentials.map {
       case (consumerKey, requestToken) =>
+        // Set up a joined iteratee and enumerator
+        val (iteratee, enumerator) = Concurrent.joined[Array[Byte]]
+
+        // Define the stream transformation pipeline. Each stage is connected using &> operation
+        val jsonStream: Enumerator[JsObject] =
+          enumerator &>
+          Encoding.decode() &>
+          Enumeratee.grouped(JsonIteratees.jsSimpleObject)
+
+        val loggingIteratee = Iteratee.forEach[JsObject] { value =>
+          Logger.info(value.toString)
+        }
+
+        // Plugs the transformed JSON stream into the logging iteratee to print out its results to the console
+        // `run` tells the enumerator to feed data to the iteratee asap
+        jsonStream run loggingIteratee
+
         WS
           .url("https://stream.twitter.com/1.1/statuses/filter.json")
           .sign(OAuthCalculator(consumerKey, requestToken))
@@ -53,7 +71,10 @@ class Application extends Controller {
           .get{ response =>
             Logger.info("Status: " + response.status)
             // Start consuming response
-            loggingIteratee
+            // iteratee is the entry point of the data streamed through the http request. The stream consumed by the iteratee
+            // will be passed on to the enumerator, which itself is the data source of the jsonStream.
+            // All of this is nonblocking.
+            iteratee
           }
           .map { _ =>
             Ok("Stream closed") // This only fires when the stream is entirely consumed or closed
