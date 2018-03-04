@@ -3,23 +3,42 @@
 @main(message) {
   <div id="tweets"></div>
   <script type="text/javascript">
-    const url = "@routes.Application.tweets().webSocketURL()";
-    // Initialize WebSocket connection using Play reverse route.
-    const tweetSocket = new WebSocket(url);
 
-    // Message received callback
-    tweetSocket.onmessage = (event) => {
+    function appendTweet(text) {
+      const tweet = document.createElement('p');
+      const message = document.createTextNode(text);
+      tweet.appendChild(message);
+      document.getElementById('tweets').appendChild(tweet);
+    }
+
+    function connect(attempt) {
+      const connectionAttempt = attempt;
+      const url = "@routes.Application.tweets().webSocketURL()";
+      // Initialize WebSocket connection using Play reverse route.
+      const tweetSocket = new WebSocket(url);
+
+      tweetSocket.onmessage = (event) => {
         console.log(event);
         const data = JSON.parse(event.data);
-        const tweet = document.createElement('p');
-        const text = document.createTextNode(data.text);
-        tweet.appendChild(text);
-        document.getElementById('tweets').appendChild(tweet);
-    };
+        appendTweet(data.text)
+      };
 
-    tweetSocket.onopen = () => {
+      tweetSocket.onopen = () => {
+        connectionAttempt = 1;
         // Send a subscription request to the server on open
         tweetSocket.send('subscribe');
+      };
+
+      tweetSocket.onclose = () => {
+        if (connectionAttempt <= 3) {
+          appendTweet("WARNING Lost server connect, attempting to reconnect");
+          setTimeout(() => connect(connectionAttempt++), 5000);
+        } else {
+          alert("The connection with the server was lost");
+        }
+      };
     }
+
+    connect(1);
   </script>
 }
