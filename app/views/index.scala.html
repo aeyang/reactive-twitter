@@ -1,7 +1,25 @@
-@(message: String)
+@(message: String)(implicit request: RequestHeader)
 
-@main("Welcome to Play") {
+@main(message) {
+  <div id="tweets"></div>
+  <script type="text/javascript">
+    const url = "@routes.Application.tweets().webSocketURL()";
+    // Initialize WebSocket connection using Play reverse route.
+    const tweetSocket = new WebSocket(url);
 
-    @play20.welcome(message)
+    // Message received callback
+    tweetSocket.onmessage = (event) => {
+        console.log(event);
+        const data = JSON.parse(event.data);
+        const tweet = document.createElement('p');
+        const text = document.createTextNode(data.text);
+        tweet.appendChild(text);
+        document.getElementById('tweets').appendChild(tweet);
+    };
 
+    tweetSocket.onopen = () => {
+        // Send a subscription request to the server on open
+        tweetSocket.send('subscribe');
+    }
+  </script>
 }

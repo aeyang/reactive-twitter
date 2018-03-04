@@ -14,7 +14,7 @@ import play.extras.iteratees._
 
 class Application extends Controller {
 
-  def index = Action {
+  def index = Action { implicit request =>
     Ok(views.html.index("Your new application is ready."))
   }
 
@@ -22,7 +22,7 @@ class Application extends Controller {
     * Create an Action to render Tweets HTML page
     * @return Future
     */
-  def tweets = Action.async {
+  def tweeets = Action.async {
 
     /*
     Define a logging iteratee that consumes a stream asynchronously and logs the
@@ -60,7 +60,7 @@ class Application extends Controller {
         }
 
         // Plugs the transformed JSON stream into the logging iteratee to print out its results to the console
-        // `run` tells the enumerator to feed data to the iteratee asap
+        // `run` tells the enumerator to feed data to the iteratee ASAP
         jsonStream run loggingIteratee
 
         WS
@@ -85,6 +85,17 @@ class Application extends Controller {
             InternalServerError("Twitter credentials missing")
           }
       }
+  }
+
+  /**
+   * This method replaces the one above by using an Actor.
+   * Notice this method is not an Action because Actions only deal with HTTP protocol.
+   *
+   * tweets is a function that, given a RequestHeader returns another function that, given
+   * an ActorRef returns a Props object.
+   */
+  def tweets = WebSocket.acceptWithActor[String, JsValue] {
+    request => out => TwitterStreamer.props(out)
   }
 
   /**
