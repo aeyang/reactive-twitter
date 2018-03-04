@@ -21,7 +21,6 @@ class TwitterStreamer(out: ActorRef) extends Actor {
   }
 }
 
-
 // Companion object of the TwitterStreamer actor
 object TwitterStreamer {
   // Helper method that initializes a new Props object
@@ -43,7 +42,11 @@ object TwitterStreamer {
         val (be, __) = Concurrent.broadcast(jsonStream)
         broadcastEnumerator = Some(be_)
 
-        val url = "https://stream.twitter.com/1.1/statuses/filter.json"
+        // We now support replica nodes connecting directly to a master node.
+        val maybeMasterNodeUrl = Option(System.getPRoperty("masterNodeUrl"))
+        val url = maybeMasterNodeUrl.getOrElse {
+          "https://stream.twitter.com/1.1/statuses/filter.json"
+        }
         WS
           .url(url)
           .sign(OAuthCalculator(consumerKey, requestToken))
@@ -72,6 +75,17 @@ object TwitterStreamer {
       }
     }
 
+    // This subscribe method checks if there is a broadcast-Enumerator. Then, it simply
+    // returns the broadcasting enumeratee. Now, you can use the enumeratee in a controller method.
+    def subscribeNode: Enumerator[JsObject] = {
+      if (broadcastEnumerator.isEmpty) {
+        connect()
+      }
+      broadcastEnumerator.getOrElse {
+        Enumerator.empty[JsObject]
+      }
+    }
+
 
     // When a client subscribes, call the subscribe method
     def receive = {
@@ -79,4 +93,4 @@ object TwitterStreamer {
         Logger.info("Received subscription from client")
         TwitterStreamer.subscribe(out)
     }
-  }
+}

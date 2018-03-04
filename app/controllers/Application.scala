@@ -88,7 +88,7 @@ class Application extends Controller {
   }
 
   /**
-   * This method replaces the one above by using an Actor.
+   * This method replaces the one above by using an Akka Actor.
    * Notice this method is not an Action because Actions only deal with HTTP protocol.
    *
    * tweets is a function that, given a RequestHeader returns another function that, given
@@ -114,4 +114,12 @@ class Application extends Controller {
       ConsumerKey(apiKey, apiSecret),
       RequestToken(token, tokenSecret)
     )
+
+  /**
+   * Allows a replica node to consume the original broadcast
+   */
+  def replicateFeed = Action {implicit request =>
+    // feed method feeds the stream provided by the enumerator as an HTTP request
+    Ok.feed(TwitterStreamer.subscribeNode)
+  }
 }
